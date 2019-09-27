@@ -18,8 +18,8 @@ pub struct Layer {
 }
 
 enum Entry {
-    Loaded(Glyph),
     // Boxed so we can clone
+    Loaded(Rc<Glyph>),
     Errored(Rc<Error>),
 }
 
@@ -35,13 +35,13 @@ impl Layer {
     ///
     /// Glyphs are lazily loaded from files on disk, so this function may
     /// fail if a glyph file cannot be read.
-    pub fn get_glyph(&mut self, glyph: &str) -> Result<&Glyph, Error> {
+    pub fn get_glyph(&mut self, glyph: &str) -> Result<Rc<Glyph>, Error> {
         if !self.loaded.contains_key(glyph) {
             self.load_glyph(glyph);
         }
 
         match self.loaded.get(glyph).expect("glyph always loaded before get") {
-            Entry::Loaded(ref g) => return Ok(g),
+            Entry::Loaded(g) => return Ok(g.clone()),
             Entry::Errored(e) => return Err(Error::SavedError(e.clone())),
         }
     }
@@ -57,7 +57,7 @@ impl Layer {
         //FIXME: figure out what bookkeeping we have to do with this path
         let _path = path.into();
         let name = glyph.name.clone();
-        self.loaded.insert(name.clone(), Entry::Loaded(glyph));
+        self.loaded.insert(name.clone(), Entry::Loaded(Rc::new(glyph)));
     }
 
     /// Remove the named glyph from this layer.
@@ -73,7 +73,7 @@ impl Layer {
 
     fn load_glyph(&mut self, glyph: &str) {
         let glif = match self.load_glyph_impl(&glyph) {
-            Ok(g) => Entry::Loaded(g),
+            Ok(g) => Entry::Loaded(Rc::new(g)),
             Err(e) => Entry::Errored(Rc::new(e)),
         };
         self.loaded.insert(glyph.to_owned(), glif);
